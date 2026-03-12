@@ -18,12 +18,8 @@ def create_input_files(dataset, karpathy_json_path, image_folder,
 
     assert dataset in {'coco', 'flickr8k', 'flickr30k'}
 
-    # =====================================================
-    # ✅ FIX: ensure output directory exists
-    # =====================================================
     os.makedirs(output_folder, exist_ok=True)
 
-    # Read Karpathy JSON
     with open(karpathy_json_path, 'r', encoding='utf-8') as j:
         data = json.load(j)
 
@@ -173,7 +169,7 @@ def clip_gradient(optimizer, grad_clip):
 def save_checkpoint(data_name, epoch, epochs_since_improvement,
                     encoder, decoder,
                     encoder_optimizer, decoder_optimizer,
-                    bleu4, is_best):
+                    bleu4, is_best, scst=False):
 
     state = {
         'epoch': epoch,
@@ -182,11 +178,16 @@ def save_checkpoint(data_name, epoch, epochs_since_improvement,
         'encoder': encoder,
         'decoder': decoder,
         'encoder_optimizer': encoder_optimizer,
-        'decoder_optimizer': decoder_optimizer
+        'decoder_optimizer': decoder_optimizer,
+        'scst': scst,
     }
 
     filename = f'checkpoint_{data_name}.pth.tar'
     torch.save(state, filename)
+
+    if epoch >= 70:
+        epoch_filename = f'checkpoint_{data_name}_epoch_{epoch}.pth.tar'
+        torch.save(state, epoch_filename)
 
     if is_best:
         torch.save(state, f'BEST_{filename}')

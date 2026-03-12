@@ -4,6 +4,7 @@ from torch import nn
 import torch.nn.functional as F
 import torchvision
 import math
+from torch.distributions import Categorical   # Required for SCST
 
 device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
 
@@ -259,3 +260,50 @@ class DecoderWithAttention(nn.Module):
             predictions[:batch_size_t, t, :] = preds
 
         return predictions, encoded_captions, decode_lengths, None, sort_ind
+
+    # =====================
+    # Sample method for SCST
+    # =====================
+    def sample(self, encoder_out, max_len=20, greedy=False):
+        """Sample a caption from the model (used in SCST)"""
+        batch_size = encoder_out.size(0)
+        h, c = self.init_hidden_state(encoder_out)
+
+        # <start> token index (usually 0 in most word_maps)
+        prev_words = torch.LongTensor([[0]] * batch_size).to(device)
+
+        sampled_ids = []
+        log_probs = []
+
+        for t in range(max_len):
+            embeddings = self.embedding(prev_words).squeeze(1)
+
+            context, _ = self.attention(encoder_out, h)
+            gate = self.sigmoid(self.f_beta(h))
+            context = gate * context
+
+            h, c = self.decode_step(
+                torch.cat([embeddings, context], dim=1),
+                (h, c)
+            )
+
+            scores = self.fc(self.dropout(h))
+            scores = F.log_softmax(scores, dim=1)
+
+            if greedy:
+                next_word = scores.argmax(dim=1)
+                log_prob = None  # Not tracking log probs for greedy baseline
+            else:
+                dist = Categorical(logits=scores)
+                next_word = dist.sample()
+                log_prob = dist.log_prob(next_word)
+                log_probs.append(log_prob)
+
+            sampled_ids.append(next_word)
+            prev_words = next_word.unsqueeze(1)
+
+        sampled_ids = torch.stack(sampled_ids, dim=1)          # (batch_size, max_len)
+        if not greedy:
+            log_probs = torch.stack(log_probs, dim=1).sum(dim=1)  # sum log probs
+
+        return sampled_ids, log_probs

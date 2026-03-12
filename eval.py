@@ -10,7 +10,7 @@ import torchvision.transforms as transforms
 from datasets import *
 from utils import *
 from models import Encoder, DecoderWithAttention
-from nltk.translate.bleu_score import corpus_bleu
+from nltk.translate.bleu_score import corpus_bleu, SmoothingFunction
 from tqdm import tqdm
 
 # =======================
@@ -24,7 +24,7 @@ data_name = 'coco_5_cap_per_img_5_min_word_freq'
 
 checkpoint_path = os.path.join(
     BASE_DIR,
-    'BEST_checkpoint_coco_5_cap_per_img_5_min_word_freq.pth.tar'
+    'checkpoint_coco_5_cap_per_img_5_min_word_freq_epoch_76.pth.tar'
 )
 
 word_map_file = os.path.join(
@@ -76,7 +76,8 @@ normalize = transforms.Normalize(
 
 def evaluate(beam_size):
     """
-    Evaluation WITHOUT teacher forcing (true inference with beam search)
+    Evaluation WITHOUT teacher forcing
+    Beam search + length normalization + BLEU smoothing
     """
 
     loader = torch.utils.data.DataLoader(
@@ -87,7 +88,7 @@ def evaluate(beam_size):
             transform=transforms.Compose([normalize])
         ),
         batch_size=1,
-        shuffle=True,
+        shuffle=False,  # Changed to False for reproducibility
         num_workers=0,
         pin_memory=True
     )
@@ -95,124 +96,132 @@ def evaluate(beam_size):
     references = []
     hypotheses = []
 
-    for image, caps, caplens, allcaps in tqdm(
-        loader, desc=f"EVALUATING @ BEAM SIZE {beam_size}"
-    ):
+    smooth = SmoothingFunction().method4
+    alpha = 0.7  # length normalization strength
 
-        image = image.to(device)
+    with torch.no_grad():  # Added for efficiency
+        for image, caps, caplens, allcaps in tqdm(
+            loader, desc=f"EVALUATING @ BEAM SIZE {beam_size}"
+        ):
 
-        # =======================
-        # ENCODE IMAGE
-        # =======================
+            image = image.to(device)
 
-        encoder_out = encoder(image)            # (1, num_pixels, encoder_dim)
-        encoder_dim = encoder_out.size(-1)
-        num_pixels = encoder_out.size(1)
+            # =======================
+            # ENCODE IMAGE
+            # =======================
 
-        encoder_out = encoder_out.expand(beam_size, num_pixels, encoder_dim)
+            encoder_out = encoder(image)                 # (1, num_pixels, encoder_dim)
+            encoder_dim = encoder_out.size(-1)
+            num_pixels = encoder_out.size(1)
 
-        # =======================
-        # INITIALIZE BEAM
-        # =======================
+            encoder_out = encoder_out.expand(beam_size, num_pixels, encoder_dim)
 
-        k = beam_size
-        prev_words = torch.LongTensor([[word_map['<start>']]] * k).to(device)
-        seqs = prev_words
+            # =======================
+            # INITIALIZE BEAM
+            # =======================
 
-        top_k_scores = torch.zeros(k, 1).to(device)
+            k = beam_size
+            prev_words = torch.LongTensor([[word_map['<start>']]] * k).to(device)
 
-        complete_seqs = []
-        complete_seqs_scores = []
+            seqs = prev_words
+            top_k_scores = torch.zeros(k, 1).to(device)
 
-        # Initialize LSTM state
-        h, c = decoder.init_hidden_state(encoder_out)
+            complete_seqs = []
+            complete_seqs_scores = []
 
-        step = 1
+            h, c = decoder.init_hidden_state(encoder_out)
 
-        while True:
+            step = 1
 
-            embeddings = decoder.embedding(prev_words).squeeze(1)
+            while True:
 
-            context, _ = decoder.attention(encoder_out, h)
-            gate = decoder.sigmoid(decoder.f_beta(h))
-            context = gate * context
+                embeddings = decoder.embedding(prev_words).squeeze(1)
 
-            h, c = decoder.decode_step(
-                torch.cat([embeddings, context], dim=1),
-                (h, c)
-            )
+                context, _ = decoder.attention(encoder_out, h)
+                gate = decoder.sigmoid(decoder.f_beta(h))
+                context = gate * context
 
-            scores = decoder.fc(h)
-            scores = F.log_softmax(scores, dim=1)
+                h, c = decoder.decode_step(
+                    torch.cat([embeddings, context], dim=1),
+                    (h, c)
+                )
 
-            scores = top_k_scores.expand_as(scores) + scores
+                scores = decoder.fc(h)
+                scores = F.log_softmax(scores, dim=1)
 
-            if step == 1:
-                top_k_scores, top_k_words = scores[0].topk(k, 0, True, True)
-            else:
-                top_k_scores, top_k_words = scores.view(-1).topk(k, 0, True, True)
+                scores = top_k_scores.expand_as(scores) + scores
 
-            prev_word_inds = top_k_words // vocab_size
-            next_word_inds = top_k_words % vocab_size
+                if step == 1:
+                    top_k_scores, top_k_words = scores[0].topk(k, 0, True, True)
+                else:
+                    top_k_scores, top_k_words = scores.view(-1).topk(k, 0, True, True)
 
-            seqs = torch.cat(
-                [seqs[prev_word_inds], next_word_inds.unsqueeze(1)],
-                dim=1
-            )
+                prev_word_inds = top_k_words // vocab_size
+                next_word_inds = top_k_words % vocab_size
 
-            incomplete_inds = [
-                i for i, w in enumerate(next_word_inds)
-                if w != word_map['<end>']
+                seqs = torch.cat(
+                    [seqs[prev_word_inds], next_word_inds.unsqueeze(1)],
+                    dim=1
+                )
+
+                incomplete_inds = [
+                    i for i, w in enumerate(next_word_inds)
+                    if w != word_map['<end>']
+                ]
+                complete_inds = list(set(range(len(next_word_inds))) - set(incomplete_inds))
+
+                # =======================
+                # STORE COMPLETED SEQS
+                # =======================
+
+                for i in complete_inds:
+                    length = seqs[i].size(0)
+                    score = top_k_scores[i].item() / (length ** alpha)  # Added .item() for safety
+                    complete_seqs.append(seqs[i].tolist())
+                    complete_seqs_scores.append(score)
+
+                k -= len(complete_inds)
+
+                if k == 0:
+                    break
+
+                seqs = seqs[incomplete_inds]
+                h = h[prev_word_inds[incomplete_inds]]
+                c = c[prev_word_inds[incomplete_inds]]
+                encoder_out = encoder_out[prev_word_inds[incomplete_inds]]
+                top_k_scores = top_k_scores[incomplete_inds].unsqueeze(1)
+                prev_words = next_word_inds[incomplete_inds].unsqueeze(1)
+
+                if step > 50:
+                    break
+
+                step += 1
+
+            best_idx = complete_seqs_scores.index(max(complete_seqs_scores))
+            seq = complete_seqs[best_idx]
+
+            # =======================
+            # REFERENCES
+            # =======================
+
+            img_caps = allcaps[0].tolist()
+            img_captions = [
+                [w for w in c if w not in
+                 {word_map['<start>'], word_map['<end>'], word_map['<pad>']}]
+                for c in img_caps
             ]
+            references.append(img_captions)
 
-            complete_inds = list(set(range(len(next_word_inds))) - set(incomplete_inds))
+            # =======================
+            # HYPOTHESIS
+            # =======================
 
-            if len(complete_inds) > 0:
-                complete_seqs.extend(seqs[complete_inds].tolist())
-                complete_seqs_scores.extend(top_k_scores[complete_inds])
+            hypotheses.append([
+                w for w in seq
+                if w not in {word_map['<start>'], word_map['<end>'], word_map['<pad>']}
+            ])
 
-            k -= len(complete_inds)
-
-            if k == 0:
-                break
-
-            seqs = seqs[incomplete_inds]
-            h = h[prev_word_inds[incomplete_inds]]
-            c = c[prev_word_inds[incomplete_inds]]
-            encoder_out = encoder_out[prev_word_inds[incomplete_inds]]
-            top_k_scores = top_k_scores[incomplete_inds].unsqueeze(1)
-            prev_words = next_word_inds[incomplete_inds].unsqueeze(1)
-
-            if step > 50:
-                break
-
-            step += 1
-
-        best_idx = complete_seqs_scores.index(max(complete_seqs_scores))
-        seq = complete_seqs[best_idx]
-
-        # =======================
-        # REFERENCES
-        # =======================
-
-        img_caps = allcaps[0].tolist()
-        img_captions = [
-            [w for w in c if w not in
-             {word_map['<start>'], word_map['<end>'], word_map['<pad>']}]
-            for c in img_caps
-        ]
-        references.append(img_captions)
-
-        # =======================
-        # HYPOTHESIS
-        # =======================
-
-        hypotheses.append([
-            w for w in seq
-            if w not in {word_map['<start>'], word_map['<end>'], word_map['<pad>']}
-        ])
-
-    bleu4 = corpus_bleu(references, hypotheses)
+    bleu4 = corpus_bleu(references, hypotheses, smoothing_function=smooth)
     return bleu4
 
 
