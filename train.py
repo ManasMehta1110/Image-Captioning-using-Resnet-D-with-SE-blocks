@@ -62,8 +62,8 @@ decoder_lr = 4e-4
 
 # SCST-safe learning rates — used when a CE checkpoint is loaded and
 # use_scst=True, because the old optimizer state is discarded.
-scst_decoder_lr = 7e-6
-scst_encoder_lr = 3e-6
+scst_decoder_lr = 1e-6
+scst_encoder_lr = 1e-7
 
 grad_clip = 2.      # Tighter clip for SCST stability (was 5.0)
 best_bleu4 = 0.
@@ -76,7 +76,7 @@ checkpoint = None
 
 checkpoint_path = os.path.join(
     BASE_DIR,
-    f'checkpoint_{data_name}_epoch_77.pth.tar'
+    f'checkpoint_{data_name}_epoch_76.pth.tar'
 )
 
 if os.path.isfile(checkpoint_path):
@@ -308,11 +308,24 @@ def train(train_loader, encoder, decoder, criterion, encoder_optimizer, decoder_
             sampled_scores = torch.tensor(sampled_scores, dtype=torch.float, device=device)
             greedy_scores  = torch.tensor(greedy_scores, dtype=torch.float, device=device)
 
-            # Normalise the reward signal to reduce scale sensitivity
+            # Normalise the reward signal
             rewards = sampled_scores - greedy_scores
             rewards = (rewards - rewards.mean()) / (rewards.std() + 1e-8)
 
-            loss = -(rewards * log_probs).mean()
+            log_probs = log_probs.to(device)
+            # RL Loss
+            rl_loss = -(rewards * log_probs).mean()
+
+            # Cross-Entropy (Teacher Forcing) Loss for Stability
+            predictions, caps_sorted, decode_lengths, _, sort_ind = decoder(imgs, caps, caplens)
+            targets = caps_sorted[:, 1:]
+            ce_loss = 0
+            for i, l in enumerate(decode_lengths):
+                ce_loss += criterion(predictions[i, :l, :], targets[i, :l])
+            ce_loss = ce_loss / sum(decode_lengths)
+
+            # Mixed Loss (80% RL, 20% Cross-Entropy) to brutally anchor grammar
+            loss = (0.80 * rl_loss) + (0.20 * ce_loss)
 
         else:
             predictions, caps_sorted, decode_lengths, _, sort_ind = decoder(imgs, caps, caplens)
