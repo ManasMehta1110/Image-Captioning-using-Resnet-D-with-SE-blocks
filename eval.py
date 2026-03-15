@@ -11,6 +11,7 @@ from datasets import *
 from utils import *
 from models import Encoder, DecoderWithAttention
 from nltk.translate.bleu_score import corpus_bleu, SmoothingFunction
+from pycocoevalcap.cider.cider import Cider   # ← Added for CIDEr
 from tqdm import tqdm
 
 # =======================
@@ -88,7 +89,7 @@ def evaluate(beam_size):
             transform=transforms.Compose([normalize])
         ),
         batch_size=1,
-        shuffle=False,  # Changed to False for reproducibility
+        shuffle=False,
         num_workers=0,
         pin_memory=True
     )
@@ -96,29 +97,27 @@ def evaluate(beam_size):
     references = []
     hypotheses = []
 
-    smooth = SmoothingFunction().method4
-    alpha = 0.7  # length normalization strength
+    # === ADDED FOR CIDEr ===
+    gt_dict = {}
+    res_dict = {}
+    image_id = 0
+    cider_scorer = Cider()
 
-    with torch.no_grad():  # Added for efficiency
+    smooth = SmoothingFunction().method4
+    alpha = 0.7
+
+    with torch.no_grad():
         for image, caps, caplens, allcaps in tqdm(
             loader, desc=f"EVALUATING @ BEAM SIZE {beam_size}"
         ):
 
             image = image.to(device)
 
-            # =======================
-            # ENCODE IMAGE
-            # =======================
-
-            encoder_out = encoder(image)                 # (1, num_pixels, encoder_dim)
+            encoder_out = encoder(image)
             encoder_dim = encoder_out.size(-1)
             num_pixels = encoder_out.size(1)
 
             encoder_out = encoder_out.expand(beam_size, num_pixels, encoder_dim)
-
-            # =======================
-            # INITIALIZE BEAM
-            # =======================
 
             k = beam_size
             prev_words = torch.LongTensor([[word_map['<start>']]] * k).to(device)
@@ -170,13 +169,9 @@ def evaluate(beam_size):
                 ]
                 complete_inds = list(set(range(len(next_word_inds))) - set(incomplete_inds))
 
-                # =======================
-                # STORE COMPLETED SEQS
-                # =======================
-
                 for i in complete_inds:
                     length = seqs[i].size(0)
-                    score = top_k_scores[i].item() / (length ** alpha)  # Added .item() for safety
+                    score = top_k_scores[i].item() / (length ** alpha)
                     complete_seqs.append(seqs[i].tolist())
                     complete_seqs_scores.append(score)
 
@@ -216,13 +211,32 @@ def evaluate(beam_size):
             # HYPOTHESIS
             # =======================
 
-            hypotheses.append([
+            hyp = [
                 w for w in seq
                 if w not in {word_map['<start>'], word_map['<end>'], word_map['<pad>']}
-            ])
+            ]
+            hypotheses.append(hyp)
+
+            # =======================
+            # ADDED: CIDEr DICTS
+            # =======================
+            gt_strs = [' '.join([rev_word_map.get(w, '<unk>') for w in cap]) for cap in img_captions]
+            hyp_str = ' '.join([rev_word_map.get(w, '<unk>') for w in hyp])
+
+            gt_dict[str(image_id)] = gt_strs
+            res_dict[str(image_id)] = [hyp_str]
+
+            image_id += 1
 
     bleu4 = corpus_bleu(references, hypotheses, smoothing_function=smooth)
-    return bleu4
+
+    # =======================
+    # ADDED: CIDEr SCORE
+    # =======================
+    cider_scorer = Cider()
+    cider_score, _ = cider_scorer.compute_score(gt_dict, res_dict)
+
+    return bleu4, cider_score
 
 
 # =======================
@@ -231,5 +245,6 @@ def evaluate(beam_size):
 
 if __name__ == '__main__':
     beam_size = 5
-    bleu4 = evaluate(beam_size)
+    bleu4, cider_score = evaluate(beam_size)
     print(f"\nBLEU-4 @ beam size {beam_size}: {bleu4:.4f}")
+    print(f"CIDEr score: {cider_score:.4f}")
