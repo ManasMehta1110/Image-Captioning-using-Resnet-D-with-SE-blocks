@@ -35,11 +35,11 @@ Epoch 33 | Train Loss 0.2058 | Val Loss 0.2260 | BLEU-4 0.1791
 Epoch 34 | Train Loss 0.2047 | Val Loss 0.2265 | BLEU-4 0.1748
 Epoch 35 | Train Loss 0.2035 | Val Loss 0.2274 | BLEU-4 0.1751
 Epoch 36 | Train Loss 0.2023 | Val Loss 0.2283 | BLEU-4 0.1762
-2026-02-12 22:10:44,876 Epoch 37 | Train Loss 0.2014 | Val Loss 0.2275 | BLEU-4 0.1760
-2026-02-13 00:41:14,092 Epoch 38 | Train Loss 0.2004 | Val Loss 0.2274 | BLEU-4 0.1760
-2026-02-13 11:39:40,906 Epoch 39 | Train Loss 0.1994 | Val Loss 0.2274 | BLEU-4 0.1777
-2026-02-13 14:10:29,655 Epoch 40 | Train Loss 0.1984 | Val Loss 0.2295 | BLEU-4 0.1767
-2026-02-13 16:42:14,805 Epoch 41 | Train Loss 0.1975 | Val Loss 0.2296 | BLEU-4 0.1749
+Epoch 37 | Train Loss 0.2014 | Val Loss 0.2275 | BLEU-4 0.1760
+Epoch 38 | Train Loss 0.2004 | Val Loss 0.2274 | BLEU-4 0.1760
+Epoch 39 | Train Loss 0.1994 | Val Loss 0.2274 | BLEU-4 0.1777
+Epoch 40 | Train Loss 0.1984 | Val Loss 0.2295 | BLEU-4 0.1767
+Epoch 41 | Train Loss 0.1975 | Val Loss 0.2296 | BLEU-4 0.1749
 2026-02-13 19:14:41,761 Epoch 42 | Train Loss 0.1966 | Val Loss 0.2292 | BLEU-4 0.1770
 2026-02-13 22:33:30,028 Epoch 43 | Train Loss 0.1958 | Val Loss 0.2296 | BLEU-4 0.1754
 2026-02-14 12:03:03,063 Epoch 44 | Train Loss 0.1948 | Val Loss 0.2303 | BLEU-4 0.1760
