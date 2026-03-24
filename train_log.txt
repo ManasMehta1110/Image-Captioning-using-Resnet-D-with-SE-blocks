@@ -107,4 +107,7 @@ Epoch 105 | Train Loss -0.9183 | Val Loss 0.3243 | BLEU-4 0.1763
 Epoch 106 | Train Loss -0.9465 | Val Loss 0.3223 | BLEU-4 0.1764
 Epoch 107 | Train Loss -0.9707 | Val Loss 0.3253 | BLEU-4 0.1757
 Epoch 108 | Train Loss -0.9465 | Val Loss 0.3269 | BLEU-4 0.1755
+Epoch 109 | Train Loss -1.0114 | Val Loss 0.3251 | BLEU-4 0.1760
+Epoch 110 | Train Loss -1.0222 | Val Loss 0.3281 | BLEU-4 0.1744
+Epoch 111 | Train Loss -1.0288 | Val Loss 0.3278 | BLEU-4 0.1747
 
