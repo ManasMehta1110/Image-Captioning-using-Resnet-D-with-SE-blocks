@@ -15,16 +15,16 @@ Epoch 13 | Train Loss 0.2234 | Val Loss 0.2303 | BLEU-4 0.1570
 Epoch 14 | Train Loss 0.2225 | Val Loss 0.2301 | BLEU-4 0.1571
 Epoch 15 | Train Loss 0.2216 | Val Loss 0.2302 | BLEU-4 0.1580
 Epoch 16 | Train Loss 0.2209 | Val Loss 0.2304 | BLEU-4 0.1602
-2026-02-09 12:31:51,947 Epoch 17 | Train Loss 0.2201 | Val Loss 0.2304 | BLEU-4 0.1580
-2026-02-09 14:05:39,202 Epoch 18 | Train Loss 0.2195 | Val Loss 0.2310 | BLEU-4 0.1587
-2026-02-09 15:42:05,949 Epoch 19 | Train Loss 0.2189 | Val Loss 0.2307 | BLEU-4 0.1590
-2026-02-09 17:18:15,767 Epoch 20 | Train Loss 0.2183 | Val Loss 0.2309 | BLEU-4 0.1587
-2026-02-09 18:52:46,289 Epoch 21 | Train Loss 0.2177 | Val Loss 0.2312 | BLEU-4 0.1582
-2026-02-09 22:39:47,643 Epoch 22 | Train Loss 0.2232 | Val Loss 0.2298 | BLEU-4 0.1622
-2026-02-10 11:33:15,025 Epoch 23 | Train Loss 0.2221 | Val Loss 0.2280 | BLEU-4 0.1693
-2026-02-10 14:03:36,324 Epoch 24 | Train Loss 0.2202 | Val Loss 0.2264 | BLEU-4 0.1725
-2026-02-10 16:32:56,364 Epoch 25 | Train Loss 0.2183 | Val Loss 0.2253 | BLEU-4 0.1749
-2026-02-10 19:03:46,815 Epoch 26 | Train Loss 0.2164 | Val Loss 0.2257 | BLEU-4 0.1749
+Epoch 17 | Train Loss 0.2201 | Val Loss 0.2304 | BLEU-4 0.1580
+Epoch 18 | Train Loss 0.2195 | Val Loss 0.2310 | BLEU-4 0.1587
+Epoch 19 | Train Loss 0.2189 | Val Loss 0.2307 | BLEU-4 0.1590
+Epoch 20 | Train Loss 0.2183 | Val Loss 0.2309 | BLEU-4 0.1587
+Epoch 21 | Train Loss 0.2177 | Val Loss 0.2312 | BLEU-4 0.1582
+Epoch 22 | Train Loss 0.2232 | Val Loss 0.2298 | BLEU-4 0.1622
+Epoch 23 | Train Loss 0.2221 | Val Loss 0.2280 | BLEU-4 0.1693
+Epoch 24 | Train Loss 0.2202 | Val Loss 0.2264 | BLEU-4 0.1725
+Epoch 25 | Train Loss 0.2183 | Val Loss 0.2253 | BLEU-4 0.1749
+Epoch 26 | Train Loss 0.2164 | Val Loss 0.2257 | BLEU-4 0.1749
 2026-02-11 11:00:13,482 Epoch 27 | Train Loss 0.2145 | Val Loss 0.2251 | BLEU-4 0.1774
 2026-02-11 13:29:48,647 Epoch 28 | Train Loss 0.2128 | Val Loss 0.2247 | BLEU-4 0.1757
 2026-02-11 16:01:32,471 Epoch 29 | Train Loss 0.2113 | Val Loss 0.2244 | BLEU-4 0.1794
