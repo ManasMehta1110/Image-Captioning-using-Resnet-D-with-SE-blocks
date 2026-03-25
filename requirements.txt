@@ -1,0 +1,8 @@
+torch>=2.0.0
+torchvision>=0.15.0
+nltk>=3.5
+h5py>=3.1.0
+tqdm>=4.64.0
+Pillow>=9.0.0
+pycocoevalcap>=1.2
+numpy>=1.21.0
