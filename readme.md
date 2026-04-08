@@ -21,7 +21,6 @@
 | [m-RNN (Mao et al., 2014)](https://arxiv.org/abs/1412.6622) | VGG-16 | CE only | 0.2260 | — |
 | **This project (Single Model)** | **SE-ResNet-50-D** | **80/20 Mixed SCST** | **0.2264** | **0.6210** |
 | **This project (SOTA Ensemble)** | **SE-ResNet-50-D** | **Polyak Snapshot** | **0.2301** | **0.6236** |
-| [Bottom-Up Top-Down (2018)](https://arxiv.org/abs/1707.07998) | Faster-RCNN | CE → SCST | 0.363 | 1.10 |
 
 > **Note:** Our model outperforms foundational baselines (Karpathy/Mao) using a parameter-efficient 512-dim architecture. Measured on Karpathy test split with **Beam size 7** and **4-gram blocking**.
 
