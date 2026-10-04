@@ -1,0 +1,22 @@
+{
+ "feat_dir": "data/coco/timm_features/seresnet50",
+ "train_splits": [
+  "train",
+  "restval"
+ ],
+ "loss": "mixed",
+ "rl_weight": 0.8,
+ "no_norm_adv": true,
+ "init": "runs/ce_seresnet50_s0/best.pt",
+ "init_ep87": false,
+ "keep_optimizer": false,
+ "lr": 5e-05,
+ "epochs": 10,
+ "batch_size": 32,
+ "max_steps_per_epoch": 0,
+ "grad_clip": 2.0,
+ "patience": 10,
+ "seed": 0,
+ "out": "runs/scst_mixed_nonorm_se_s0",
+ "resume": true
+}

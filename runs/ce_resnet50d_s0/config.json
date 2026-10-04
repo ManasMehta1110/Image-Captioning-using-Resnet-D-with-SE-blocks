@@ -1,0 +1,22 @@
+{
+ "feat_dir": "data/coco/timm_features/resnet50d",
+ "train_splits": [
+  "train",
+  "restval"
+ ],
+ "loss": "ce",
+ "rl_weight": 0.8,
+ "no_norm_adv": false,
+ "init": null,
+ "init_ep87": false,
+ "keep_optimizer": false,
+ "lr": 0.0004,
+ "epochs": 20,
+ "batch_size": 16,
+ "max_steps_per_epoch": 0,
+ "grad_clip": 2.0,
+ "patience": 3,
+ "seed": 0,
+ "out": "C:\\Projects\\Image-Captioning-using-Resnet-D-with-SE-blocks\\runs\\ce_resnet50d_s0",
+ "resume": false
+}

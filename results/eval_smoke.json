@@ -1,0 +1,290 @@
+{
+ "config": {
+  "checkpoint": "C:\\Projects\\Image-Captioning-using-Resnet-D-with-SE-blocks\\checkpoint_coco_5_cap_per_img_5_min_word_freq_epoch_87.pth.tar",
+  "karpathy_json": "C:\\Projects\\Image-Captioning-using-Resnet-D-with-SE-blocks\\data\\coco\\annotations\\dataset_coco.json",
+  "image_root": "C:\\Projects\\Image-Captioning-using-Resnet-D-with-SE-blocks\\data\\coco\\images",
+  "word_map": "C:\\Projects\\Image-Captioning-using-Resnet-D-with-SE-blocks\\data\\coco\\processed\\WORDMAP_coco_5_cap_per_img_5_min_word_freq.json",
+  "split": "test",
+  "beam": 7,
+  "alpha": 0.7,
+  "min_len": 5,
+  "block_ngram": 4,
+  "max_steps": 50,
+  "limit": 50,
+  "spice": false,
+  "java_home": null,
+  "tag": "smoke"
+ },
+ "checkpoint_epoch": 87,
+ "n_images": 50,
+ "metrics": {
+  "BLEU-1": 0.6043420806625911,
+  "BLEU-2": 0.4009371915353743,
+  "BLEU-3": 0.2719747361935186,
+  "BLEU-4": 0.19876386533372895,
+  "METEOR": 0.17625093071502615,
+  "ROUGE-L": 0.4169644147200468,
+  "CIDEr": 0.5673263620399251
+ },
+ "caption_stats": {
+  "avg_length": 9.16,
+  "vocab_used": 128,
+  "distinct_1": 0.2794759825327511,
+  "distinct_2": 0.5490196078431373,
+  "repeat_word_rate": 0.02,
+  "dangling_end_rate": 0.02,
+  "unique_caption_rate": 0.96
+ },
+ "captions": [
+  {
+   "image_id": 391895,
+   "file": "COCO_val2014_000000391895.jpg",
+   "caption": "a woman standing on a bridge holding an umbrella"
+  },
+  {
+   "image_id": 60623,
+   "file": "COCO_val2014_000000060623.jpg",
+   "caption": "a man eating a hot dog on a bun"
+  },
+  {
+   "image_id": 483108,
+   "file": "COCO_val2014_000000483108.jpg",
+   "caption": "a train that is sitting on the tracks"
+  },
+  {
+   "image_id": 384213,
+   "file": "COCO_val2014_000000384213.jpg",
+   "caption": "a living room with a couch and a tv"
+  },
+  {
+   "image_id": 386164,
+   "file": "COCO_val2014_000000386164.jpg",
+   "caption": "a room with a bed and a table"
+  },
+  {
+   "image_id": 223648,
+   "file": "COCO_val2014_000000223648.jpg",
+   "caption": "a wooden bench sitting in the middle of a beach"
+  },
+  {
+   "image_id": 403385,
+   "file": "COCO_val2014_000000403385.jpg",
+   "caption": "a bathroom with a sink and a toilet"
+  },
+  {
+   "image_id": 294832,
+   "file": "COCO_val2014_000000294832.jpg",
+   "caption": "a bathroom with a shower and a sink"
+  },
+  {
+   "image_id": 462565,
+   "file": "COCO_val2014_000000462565.jpg",
+   "caption": "a group of people riding bikes down a street"
+  },
+  {
+   "image_id": 436141,
+   "file": "COCO_val2014_000000436141.jpg",
+   "caption": "a bathroom with a sink and a toilet"
+  },
+  {
+   "image_id": 192440,
+   "file": "COCO_val2014_000000192440.jpg",
+   "caption": "a bathroom with a sink and a mirror"
+  },
+  {
+   "image_id": 1146,
+   "file": "COCO_val2014_000000001146.jpg",
+   "caption": "a man wearing a suit and tie"
+  },
+  {
+   "image_id": 559665,
+   "file": "COCO_val2014_000000559665.jpg",
+   "caption": "a man riding a motorcycle down a street"
+  },
+  {
+   "image_id": 394240,
+   "file": "COCO_val2014_000000394240.jpg",
+   "caption": "a bike parked in front of a building with a sign on it"
+  },
+  {
+   "image_id": 491497,
+   "file": "COCO_val2014_000000491497.jpg",
+   "caption": "a living room with a couch and a table"
+  },
+  {
+   "image_id": 184791,
+   "file": "COCO_val2014_000000184791.jpg",
+   "caption": "a black and white photo of a person on a skateboard"
+  },
+  {
+   "image_id": 579664,
+   "file": "COCO_val2014_000000579664.jpg",
+   "caption": "a table with a plate of food and a glass of wine"
+  },
+  {
+   "image_id": 550529,
+   "file": "COCO_val2014_000000550529.jpg",
+   "caption": "a motorcycle parked on the side of a street"
+  },
+  {
+   "image_id": 348881,
+   "file": "COCO_val2014_000000348881.jpg",
+   "caption": "a view of a bathroom with a toilet and a sink"
+  },
+  {
+   "image_id": 560623,
+   "file": "COCO_val2014_000000560623.jpg",
+   "caption": "a bird that is standing on a car"
+  },
+  {
+   "image_id": 561100,
+   "file": "COCO_val2014_000000561100.jpg",
+   "caption": "a small plane sitting on top of a runway"
+  },
+  {
+   "image_id": 354533,
+   "file": "COCO_val2014_000000354533.jpg",
+   "caption": "a man on a motorcycle with a helmet on"
+  },
+  {
+   "image_id": 334321,
+   "file": "COCO_val2014_000000334321.jpg",
+   "caption": "a man and a dog sitting on a bench"
+  },
+  {
+   "image_id": 368117,
+   "file": "COCO_val2014_000000368117.jpg",
+   "caption": "a couple of people standing on a snow covered slope"
+  },
+  {
+   "image_id": 165547,
+   "file": "COCO_val2014_000000165547.jpg",
+   "caption": "a living room with a couch and a table"
+  },
+  {
+   "image_id": 455859,
+   "file": "COCO_val2014_000000455859.jpg",
+   "caption": "a group of people playing frisbee on a beach"
+  },
+  {
+   "image_id": 290570,
+   "file": "COCO_val2014_000000290570.jpg",
+   "caption": "a couple of birds are sitting on a body of water"
+  },
+  {
+   "image_id": 281455,
+   "file": "COCO_val2014_000000281455.jpg",
+   "caption": "a bird flying over a body of water"
+  },
+  {
+   "image_id": 17756,
+   "file": "COCO_val2014_000000017756.jpg",
+   "caption": "a close up of a plate of food on a table"
+  },
+  {
+   "image_id": 305821,
+   "file": "COCO_val2014_000000305821.jpg",
+   "caption": "a group of giraffes standing in a field"
+  },
+  {
+   "image_id": 459374,
+   "file": "COCO_val2014_000000459374.jpg",
+   "caption": "a group of bananas hanging from a tree"
+  },
+  {
+   "image_id": 208589,
+   "file": "COCO_val2014_000000208589.jpg",
+   "caption": "a cat sitting on top of a wooden chair"
+  },
+  {
+   "image_id": 358342,
+   "file": "COCO_val2014_000000358342.jpg",
+   "caption": "a tall tower with a clock on top of it"
+  },
+  {
+   "image_id": 74711,
+   "file": "COCO_val2014_000000074711.jpg",
+   "caption": "a couple of birds are standing in the water"
+  },
+  {
+   "image_id": 58636,
+   "file": "COCO_val2014_000000058636.jpg",
+   "caption": "a street sign on a pole in front of a building"
+  },
+  {
+   "image_id": 197461,
+   "file": "COCO_val2014_000000197461.jpg",
+   "caption": "a sheep standing in a field of grass"
+  },
+  {
+   "image_id": 165029,
+   "file": "COCO_val2014_000000165029.jpg",
+   "caption": "a woman sitting on a bench next to a man"
+  },
+  {
+   "image_id": 336777,
+   "file": "COCO_val2014_000000336777.jpg",
+   "caption": "a building with a clock tower on top of it"
+  },
+  {
+   "image_id": 472795,
+   "file": "COCO_val2014_000000472795.jpg",
+   "caption": "a woman sitting on a bed with a dog"
+  },
+  {
+   "image_id": 182784,
+   "file": "COCO_val2014_000000182784.jpg",
+   "caption": "a man riding on the back of a horse"
+  },
+  {
+   "image_id": 458052,
+   "file": "COCO_val2014_000000458052.jpg",
+   "caption": "a dog laying on a bed with a cat"
+  },
+  {
+   "image_id": 26942,
+   "file": "COCO_val2014_000000026942.jpg",
+   "caption": "a laptop computer sitting on top of a wooden desk"
+  },
+  {
+   "image_id": 418281,
+   "file": "COCO_val2014_000000418281.jpg",
+   "caption": "a herd of cattle grazing on a lush green field"
+  },
+  {
+   "image_id": 535292,
+   "file": "COCO_val2014_000000535292.jpg",
+   "caption": "a couple of cows standing in a field"
+  },
+  {
+   "image_id": 85329,
+   "file": "COCO_val2014_000000085329.jpg",
+   "caption": "a woman holding a cell phone in her hand"
+  },
+  {
+   "image_id": 451872,
+   "file": "COCO_val2014_000000451872.jpg",
+   "caption": "a baby elephant standing next to a baby elephant"
+  },
+  {
+   "image_id": 314294,
+   "file": "COCO_val2014_000000314294.jpg",
+   "caption": "a couple of elephants standing in a field"
+  },
+  {
+   "image_id": 516750,
+   "file": "COCO_val2014_000000516750.jpg",
+   "caption": "a yellow and black fire hydrant on a beach"
+  },
+  {
+   "image_id": 69946,
+   "file": "COCO_val2014_000000069946.jpg",
+   "caption": "a boat that is sitting in the grass"
+  },
+  {
+   "image_id": 109005,
+   "file": "COCO_val2014_000000109005.jpg",
+   "caption": "a herd of elephants walking across a dry grass field"
+  }
+ ]
+}

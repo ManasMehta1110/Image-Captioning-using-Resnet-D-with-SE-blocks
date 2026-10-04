@@ -1,0 +1,13 @@
+noreset b7 ok 11:48
+noreset b3 ok 11:53
+ce_seresnet50_s0 greedy ok 11:57
+scst_mixed_se_s0 greedy ok 12:00
+scst_pure_se_s0 greedy ok 12:04
+scst_mixed_noreset_se_s0 greedy ok 12:08
+ce_resnet50_s0 greedy ok 12:11
+ce_resnet50d_s0 greedy ok 12:15
+nonorm training done 13:32
+nonorm b7 ok 13:34
+nonorm b3 ok 13:36
+nonorm greedy ok 13:37
+ALL_DONE

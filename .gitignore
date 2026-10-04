@@ -1,0 +1,15 @@
+# Data: COCO images, cached features, processed files (download / regenerate instead)
+data/
+
+# Model checkpoints: too large for git; share via a GitHub Release or Drive
+*.pth
+*.pth.tar
+*.pt
+*.pt.tmp
+
+# Progress-bar dumps from training (large, no information beyond log.jsonl)
+runs/*.out
+
+# Python cache
+__pycache__/
+*.pyc

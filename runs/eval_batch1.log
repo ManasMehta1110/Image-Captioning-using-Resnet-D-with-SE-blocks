@@ -1,0 +1,11 @@
+ce_resnet50_s0 beam7 ok 07:00
+ce_resnet50_s0 beam3 ok 07:05
+ce_seresnet50_s0 beam7 ok 07:11
+ce_seresnet50_s0 beam3 ok 07:15
+ce_resnet50d_s0 beam7 ok 07:21
+ce_resnet50d_s0 beam3 ok 07:26
+scst_mixed_se_s0 beam7 ok 07:31
+scst_mixed_se_s0 beam3 ok 07:35
+scst_pure_se_s0 beam7 ok 07:41
+scst_pure_se_s0 beam3 ok 07:45
+ALL_DONE

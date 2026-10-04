@@ -264,13 +264,16 @@ class DecoderWithAttention(nn.Module):
     # =====================
     # Sample method for SCST
     # =====================
-    def sample(self, encoder_out, max_len=20, greedy=False):
-        """Sample a caption from the model (used in SCST)"""
+    def sample(self, encoder_out, start_token, end_token, max_len=20, greedy=False):
+        """Sample a caption from the model (used in SCST).
+
+        Returns sampled ids (batch, max_len) and, when not greedy, the summed
+        log-probability of each sequence up to and including its first <end>.
+        """
         batch_size = encoder_out.size(0)
         h, c = self.init_hidden_state(encoder_out)
 
-        # <start> token index (usually 0 in most word_maps)
-        prev_words = torch.LongTensor([[0]] * batch_size).to(device)
+        prev_words = torch.full((batch_size, 1), start_token, dtype=torch.long, device=encoder_out.device)
 
         sampled_ids = []
         log_probs = []
@@ -304,6 +307,9 @@ class DecoderWithAttention(nn.Module):
 
         sampled_ids = torch.stack(sampled_ids, dim=1)          # (batch_size, max_len)
         if not greedy:
-            log_probs = torch.stack(log_probs, dim=1).sum(dim=1)  # sum log probs
+            # Mask out tokens generated after the first <end>; the <end> itself counts
+            ended = (sampled_ids == end_token).long().cumsum(dim=1)
+            mask = (ended - (sampled_ids == end_token).long()) == 0
+            log_probs = (torch.stack(log_probs, dim=1) * mask).sum(dim=1)
 
         return sampled_ids, log_probs

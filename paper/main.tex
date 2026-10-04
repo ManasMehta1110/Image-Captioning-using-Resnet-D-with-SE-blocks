@@ -1,0 +1,604 @@
+\documentclass[conference]{IEEEtran}
+\IEEEoverridecommandlockouts
+
+\usepackage{cite}
+\usepackage{amsmath,amssymb,amsfonts}
+\usepackage{graphicx}
+\usepackage{booktabs}
+\usepackage{multirow}
+\usepackage{textcomp}
+\usepackage{xcolor}
+\usepackage{url}
+
+% ---------------------------------------------------------------------------
+% Drafting helpers -- remove before camera-ready submission.
+%   \tbd{...}   : number or text that depends on experiments still running
+%   \figslot    : includes the figure if the file exists, otherwise a framed placeholder
+% ---------------------------------------------------------------------------
+\newcommand{\tbd}[1]{\textcolor{red}{[#1]}}
+\newcommand{\figslot}[3]{%
+  \IfFileExists{#1}{\includegraphics[width=#2]{#1}}%
+  {\fbox{\parbox[c][3cm][c]{#2}{\centering\footnotesize\textcolor{red}{FIGURE: #3}}}}}
+
+\begin{document}
+
+% Title kept as submitted. The text (abstract, Sec. III-A) states that SE and ResNet-D
+% are evaluated separately, since no pretrained SE-ResNet-50-D exists.
+\title{Stabilized Reinforcement Learning for Image Captioning using SE-ResNet-D}
+
+\author{
+\IEEEauthorblockN{Manas Mehta}
+\IEEEauthorblockA{\textit{CSE, GLS University}\\
+Ahmedabad, India \\
+manasmehta1110@gmail.com}
+\and
+\IEEEauthorblockN{Vishvesh Sharma}
+\IEEEauthorblockA{\textit{CSE, GLS University}\\
+Ahmedabad, India \\
+sharmavishvesh3@gmail.com}
+\and
+\IEEEauthorblockN{Dr. Madhuri Chopade}
+\IEEEauthorblockA{\textit{CSE, GLS University}\\
+Ahmedabad, India \\
+madhuri.chopade@glsuniversity.ac.in}
+}
+
+\maketitle
+
+\begin{abstract}
+Self-Critical Sequence Training (SCST) lets an image captioning model optimize
+its evaluation metric directly, but the switch from cross-entropy (CE) training
+to reinforcement learning can destabilize the model and push it toward
+repetitive, metric-seeking captions. We study this transition in a lightweight
+attention-based CNN-LSTM captioner trained on a single 4\,GB consumer GPU.
+For the encoder, we compare ImageNet-pretrained ResNet-50 models with and
+without Squeeze-and-Excitation (SE) blocks and the ResNet-D stem and
+downsampling path, all pretrained with the same recipe. For training, we analyze a mixed objective that weights the SCST loss by 0.8 and
+the CE loss by 0.2, combined with normalized advantages and an optimizer reset
+at the CE-to-RL switch, and we ablate each component. On the Karpathy test
+split of MS-COCO, the ResNet-D encoder gives the best CE model, with 31.3
+BLEU-4 and 98.2 CIDEr, while SE blocks give no measurable gain. Beyond the
+standard metrics, we measure reward hacking directly. Pure SCST raises CIDEr
+but ends 77.9\% of its test captions with a function word such as ``a'' or
+``with''. The mixed objective keeps this rate at zero for a cost of 1.8 CIDEr,
+and normalizing the advantage makes the switch to reinforcement learning
+smoother.
+\end{abstract}
+
+\begin{IEEEkeywords}
+image captioning, self-critical sequence training, reinforcement learning,
+squeeze-and-excitation, ResNet-D, attention, MS-COCO
+\end{IEEEkeywords}
+
+% ===========================================================================
+\section{Introduction}
+% ===========================================================================
+Image captioning requires a model to recognize the objects in a scene, relate
+them to one another, and express the result as a fluent sentence. The
+encoder-decoder paradigm introduced by Show and Tell~\cite{vinyals2015show}
+and extended with visual attention in Show, Attend and
+Tell~\cite{xu2015show} remains a standard design: a convolutional neural
+network (CNN) encodes the image into a grid of feature vectors, and a
+long short-term memory (LSTM) decoder attends to that grid while generating one
+word at a time.
+
+Captioning models are usually trained with a cross-entropy (CE) loss under
+teacher forcing, where the decoder always receives the ground-truth previous
+word. At inference time, it must instead condition on its own predictions, a
+mismatch known as exposure bias~\cite{ranzato2016sequence,bengio2015scheduled}.
+CE training also optimizes word-level likelihood, whereas captions are judged
+by sequence-level metrics such as BLEU~\cite{papineni2002bleu} and
+CIDEr~\cite{vedantam2015cider}. Self-Critical Sequence Training
+(SCST)~\cite{rennie2017self} addresses both issues by optimizing the metric
+directly with the REINFORCE estimator, using the model's own greedy caption as
+a baseline. SCST has problems of its own. The model can learn to exploit the
+reward by producing generic or repetitive captions that score well on CIDEr
+(reward hacking), and the abrupt change of objective at the CE-to-RL switch can
+destabilize a model trained under a different loss.
+
+We study both stages of this pipeline with limited compute. Our contributions
+are:
+\begin{itemize}
+\item A controlled comparison of ResNet-50~\cite{he2016deep},
+SE-ResNet-50~\cite{hu2018squeeze}, and ResNet-50-D~\cite{he2019bag} encoders,
+pretrained with the same recipe~\cite{wightman2021resnet} and paired with the
+same decoder.
+\item An ablation of a stabilized SCST setup: a mixed 80/20 SCST/CE
+objective~\cite{paulus2018deep}, normalized advantages, and an optimizer reset
+at the CE-to-RL switch.
+\item A direct measurement of reward hacking through vocabulary usage, caption
+uniqueness, $n$-gram diversity, and repetition.
+\end{itemize}
+Sample captions and attention maps are shown in Fig.~\ref{fig:attention}.
+
+\begin{figure}[t]
+\centering
+\figslot{figs/attention_maps.pdf}{\columnwidth}{attention maps}
+\caption{Attention of the mixed SCST model on randomly drawn Karpathy test
+images, with the greedy caption above each image. Each map brightens the
+regions weighted by $\alpha_t$ when the word above it was generated.}
+\label{fig:attention}
+\end{figure}
+
+% ===========================================================================
+\section{Related Work}
+% ===========================================================================
+\textit{Encoder-decoder captioning.} Early neural captioners paired a CNN
+image encoder with a recurrent language model~\cite{vinyals2015show,karpathy2015deep,mao2015deep}.
+Show, Attend and Tell~\cite{xu2015show} added soft attention over a spatial
+feature grid, so that the decoder can focus on different image regions at each
+step. Anderson et al.~\cite{anderson2018bottom} replaced the uniform grid with
+object-level features from a detector (bottom-up attention). Later models
+refined the attention mechanism itself~\cite{huang2019attention} and moved to
+fully transformer-based encoders and decoders~\cite{cornia2020meshed}.
+These models score much higher (Table~\ref{tab:main}), but they rely on object
+detectors or large-scale pretraining and need far more compute than we target
+here.
+
+\textit{Encoder architectures.} Squeeze-and-Excitation (SE)
+blocks~\cite{hu2018squeeze} recalibrate channels with a gate computed from
+globally pooled features, and the ResNet-D variant of He et
+al.~\cite{he2019bag} changes the stem and the downsampling shortcut
+(Section~\ref{sec:encoder}). Both improve ImageNet accuracy; we test whether
+they also improve captioning when the decoder is held fixed.
+
+\textit{Sequence-level training.} Ranzato et al.~\cite{ranzato2016sequence}
+used REINFORCE to optimize sequence-level metrics directly. SCST~\cite{rennie2017self}
+reduced the variance of this estimator by using the reward of the model's own
+greedy decoding as the baseline, and it has become the standard final stage of
+captioning pipelines~\cite{anderson2018bottom,huang2019attention,cornia2020meshed}.
+Luo~\cite{luo2020better} replaced the greedy baseline with the mean reward of
+multiple samples. Paulus et al.~\cite{paulus2018deep} combined maximum-likelihood
+and RL losses to keep generated summaries readable, which is the idea behind
+the mixed objective we study.
+
+% ===========================================================================
+\section{Method}
+% ===========================================================================
+Fig.~\ref{fig:arch} gives an overview of the model. A frozen, ImageNet-pretrained
+CNN encodes the image into a $7\times7$ grid of feature vectors, and an
+attention-based LSTM decoder generates the caption.
+
+\begin{figure*}[t]
+\centering
+\figslot{figs/architecture.pdf}{0.85\textwidth}{model overview}
+\caption{Model overview. A frozen ImageNet-pretrained encoder produces a
+$7\times7\times2048$ feature map, which is projected to 49 vectors of dimension
+512. At each step, the LSTM decoder attends over these vectors and generates
+the next word.}
+\label{fig:arch}
+\end{figure*}
+
+\subsection{Encoder}
+\label{sec:encoder}
+We compare three encoders that share the ResNet-50
+backbone~\cite{he2016deep}:
+\begin{itemize}
+\item \textbf{ResNet-50}, the baseline.
+\item \textbf{SE-ResNet-50}, which adds an SE block~\cite{hu2018squeeze} to
+every bottleneck. For a feature map $\mathbf{U}\in\mathbb{R}^{C\times H\times W}$,
+the block computes a channel descriptor by global average pooling, passes it
+through a two-layer bottleneck with reduction ratio $r=16$, and rescales each
+channel:
+\begin{align}
+z_c &= \frac{1}{HW}\sum_{i=1}^{H}\sum_{j=1}^{W} u_c(i,j), \label{eq:squeeze}\\
+\mathbf{s} &= \sigma\!\left(\mathbf{W}_2\,\delta(\mathbf{W}_1\mathbf{z})\right), \qquad
+\tilde{\mathbf{u}}_c = s_c\,\mathbf{u}_c, \label{eq:excite}
+\end{align}
+where $\delta$ is the ReLU, $\sigma$ the sigmoid,
+$\mathbf{W}_1\in\mathbb{R}^{C/r\times C}$ and
+$\mathbf{W}_2\in\mathbb{R}^{C\times C/r}$.
+\item \textbf{ResNet-50-D}~\cite{he2019bag}, which replaces the $7\times7$,
+stride-2 stem convolution with three $3\times3$ convolutions and inserts a
+$2\times2$ average pooling before the $1\times1$ projection in the
+downsampling shortcut (Fig.~\ref{fig:stem}). In both our baseline and
+ResNet-50-D, the stride of each downsampling bottleneck sits in its
+$3\times3$ convolution, so these two changes are the only difference
+between them.
+\end{itemize}
+All three encoders are pretrained on ImageNet-1k with the same recipe (the
+``A1'' procedure of~\cite{wightman2021resnet}), which keeps pretraining
+differences out of the comparison. We know of no publicly available
+SE-ResNet-50-D pretrained with this recipe, so we evaluate the two
+modifications separately.
+
+The encoders are kept frozen. A $256\times256$ input yields an
+$8\times8\times2048$ feature map, which we average-pool to $7\times7$ and
+reshape into $L=49$ vectors $\mathbf{v}_k\in\mathbb{R}^{2048}$. A trainable
+linear layer projects these to $\mathbf{a}_k = \mathbf{W}_p\mathbf{v}_k +
+\mathbf{b}_p\in\mathbb{R}^{512}$.
+
+\begin{figure}[t]
+\centering
+\figslot{figs/stem.pdf}{0.85\columnwidth}{ResNet-D modifications}
+\caption{The two ResNet-D modifications. (a) The $7\times7$ stem
+convolution is replaced by three $3\times3$ convolutions. (b) In the
+downsampling shortcut, a stride-2 $1\times1$ convolution, which skips three of
+every four positions, is replaced by $2\times2$ average pooling followed by a
+stride-1 $1\times1$ convolution.}
+\label{fig:stem}
+\end{figure}
+
+\subsection{Attention-Based LSTM Decoder}
+The decoder follows the soft-attention model of Xu et al.~\cite{xu2015show}.
+Its hidden and memory states are initialized from the mean feature,
+$\mathbf{h}_0 = \mathbf{W}_{h}\bar{\mathbf{a}}$ and
+$\mathbf{c}_0 = \mathbf{W}_{c}\bar{\mathbf{a}}$ with
+$\bar{\mathbf{a}} = \frac{1}{L}\sum_k \mathbf{a}_k$. At step $t$, an attention
+score is computed for every location from the previous hidden state, normalized
+with a softmax, and used to form a context vector:
+\begin{align}
+e_{t,k} &= \mathbf{w}^{\top}\,\mathrm{ReLU}\!\left(\mathbf{W}_{a}\mathbf{a}_k + \mathbf{W}_{h}'\mathbf{h}_{t-1}\right), \label{eq:energy}\\
+\alpha_{t,k} &= \frac{\exp(e_{t,k})}{\sum_{j=1}^{L}\exp(e_{t,j})}, \qquad
+\hat{\mathbf{z}}_t = \sum_{k=1}^{L}\alpha_{t,k}\,\mathbf{a}_k. \label{eq:context}
+\end{align}
+As in~\cite{xu2015show}, a gate computed from the previous hidden state scales
+the context vector element-wise before it enters the LSTM:
+\begin{equation}
+\boldsymbol{\beta}_t = \sigma\!\left(\mathbf{W}_{\beta}\mathbf{h}_{t-1}\right), \qquad
+\mathbf{x}_t = \left[\mathbf{E}y_{t-1};\ \boldsymbol{\beta}_t\odot\hat{\mathbf{z}}_t\right],
+\label{eq:gate}
+\end{equation}
+where $\mathbf{E}y_{t-1}$ is the embedding of the previous word. The gate lets
+the decoder reduce its reliance on visual context, for example when it
+generates function words such as ``the'' or ``of''. The LSTM state is updated
+from $\mathbf{x}_t$, and the next-word distribution is
+$p(y_t\mid y_{<t}, I) = \mathrm{softmax}(\mathbf{W}_o\,\mathrm{Dropout}(\mathbf{h}_t))$.
+The embedding, hidden, and attention dimensions are all 512.
+
+\subsection{Training Objectives}
+\textit{Cross-entropy.} The decoder is first trained with teacher forcing to
+minimize the token-level negative log-likelihood of the ground-truth caption
+$y^{*}$:
+\begin{equation}
+L_{\mathrm{CE}} = -\frac{1}{T}\sum_{t=1}^{T}\log p_\theta\!\left(y^{*}_t\mid y^{*}_{<t}, I\right).
+\label{eq:ce}
+\end{equation}
+
+\textit{Self-critical sequence training.} For each image, we sample a caption
+$w^{s}$ from $p_\theta$ and decode a greedy caption $w^{g}$. Each caption is
+scored with the CIDEr-D reward $r(\cdot)$, computed against all reference
+captions of the image, with document frequencies precomputed over the full
+training set. The greedy caption's reward is the
+baseline~\cite{rennie2017self}:
+\begin{equation}
+L_{\mathrm{SCST}} = -\frac{1}{B}\sum_{i=1}^{B}\hat{A}_i\,\log p_\theta\!\left(w^{s}_i\right),
+\label{eq:scst}
+\end{equation}
+where $\log p_\theta(w^{s}_i)$ sums the token log-probabilities up to and
+including the first end-of-sentence token, and $B$ is the batch size.
+
+\textit{Normalized advantage.} Instead of the raw advantage
+$A_i = r(w^{s}_i) - r(w^{g}_i)$, we use its batch-standardized form
+\begin{equation}
+\hat{A}_i = \frac{A_i - \mu_A}{\sigma_A + \epsilon},
+\label{eq:adv}
+\end{equation}
+where $\mu_A$ and $\sigma_A$ are the mean and standard deviation of $A$ within
+the batch and $\epsilon=10^{-8}$. This keeps the scale of the policy gradient
+constant as rewards grow during training.
+
+\textit{Mixed objective.} Pure SCST removes the likelihood term that keeps
+captions close to human phrasing. Following~\cite{paulus2018deep}, we keep a
+fraction of it:
+\begin{equation}
+L = \lambda\,L_{\mathrm{SCST}} + (1-\lambda)\,L_{\mathrm{CE}}, \qquad \lambda = 0.8,
+\label{eq:mixed}
+\end{equation}
+where the CE term uses one randomly chosen reference caption per image.
+
+\textit{Optimizer reset.} The Adam moment estimates accumulated during CE
+training are calibrated to CE gradients. At the CE-to-SCST switch, we discard
+them and start a fresh Adam optimizer with the lower SCST learning rate.
+
+% ===========================================================================
+\section{Experimental Setup}
+% ===========================================================================
+\subsection{Dataset and Preprocessing}
+We use MS-COCO~\cite{lin2014microsoft} with the Karpathy
+split~\cite{karpathy2015deep}: 113{,}287 training images (including the
+``restval'' images), 5{,}000 validation images, and 5{,}000 test images, each
+with at least five reference captions. Captions are lower-cased and tokenized,
+and words that occur five times or fewer are mapped to an unknown token, giving
+a vocabulary of 9{,}490 tokens including the start, end, unknown, and padding
+tokens. Captions longer than 50 words are discarded for training. Images are
+resized to $256\times256$ and normalized with the ImageNet mean and standard
+deviation. Because the encoders are frozen, their features are computed once
+and cached, and no data augmentation is applied.
+
+\subsection{Training Details}
+\label{sec:training}
+All models are implemented in PyTorch and trained on a single NVIDIA GeForce
+RTX 3050 Laptop GPU with 4\,GB of memory. Pretrained encoder weights are taken
+from the \texttt{timm} library. We use Adam with weight decay $10^{-4}$,
+element-wise gradient clipping at 2.0, and dropout of 0.5 before the output
+layer.
+
+\textit{CE stage.} The decoder and projection layer are trained from scratch
+with CE at a learning rate of $4\times10^{-4}$ for up to 20 epochs. Each batch
+holds 16 images with all of their
+reference captions, so every (image, caption) pair is seen once per epoch. The
+learning rate is halved when the validation CIDEr fails to improve for two
+consecutive epochs, and training stops after three epochs without improvement.
+
+\textit{SCST stage.} All SCST experiments use the SE-ResNet-50 encoder, the one
+closest to our original design. We fixed this choice before the encoder
+comparison was complete. Starting from the best SE-ResNet-50 CE checkpoint, the
+model is trained with the objective under study for 10 epochs, with one step
+per batch of 32 images. Sampled and greedy captions are limited to 20
+words. We set the SCST learning rate to $5\times10^{-5}$, as
+in~\cite{rennie2017self}. In a 300-step pilot run, the $10^{-6}$ used in our
+original experiments left the validation CIDEr unchanged.
+
+\textit{Model selection.} For every run, the checkpoint with the highest
+validation CIDEr under greedy decoding is selected. The test split is used only
+for the final evaluation of the selected checkpoints.
+
+\subsection{Evaluation Protocol}
+Captions are generated with beam search (beam size 7). Beam scores are
+normalized by caption length raised to $\alpha=0.7$, the end token is blocked
+for the first five words, and any word that would repeat an existing 4-gram is
+blocked. We also report greedy decoding and plain beam search (beam size 3, no
+length penalty or blocking) to show how much decoding choices contribute
+(Section~\ref{sec:decoding}).
+
+We compute BLEU-1 to BLEU-4~\cite{papineni2002bleu},
+METEOR~\cite{banerjee2005meteor}, ROUGE-L~\cite{lin2004rouge}, and
+CIDEr-D~\cite{vedantam2015cider} with the official COCO caption evaluation
+code~\cite{chen2015microsoft}, using the Penn Treebank tokenizer and all
+reference captions of each test image. Following common practice, scores are
+reported multiplied by 100. Captioning has no single correct output, so
+classification accuracy does not apply. BLEU measures $n$-gram precision
+against the references, ROUGE-L is recall-oriented, METEOR combines precision
+and recall, and CIDEr-D weights $n$-grams by TF-IDF.
+
+To quantify reward hacking, we also report the number of distinct words used,
+the share of unique captions, corpus-level distinct-2 (distinct bigrams over
+all bigrams), the share of captions that repeat a content word, and the share
+that end in a function word such as ``a'', ``with'', or ``of''.
+
+% ===========================================================================
+\section{Results and Analysis}
+% ===========================================================================
+\subsection{Main Results}
+Table~\ref{tab:main} compares our models with published results on the
+Karpathy test split. With a frozen ImageNet-pretrained SE-ResNet-50 or
+ResNet-50-D encoder, our CE models reach 31.3 BLEU-4, above the CNN-LSTM
+models of Karpathy and Fei-Fei (23.0) and of Xu et al. (24.3 and 25.0), and
+equal to the Att2in model of Rennie et al.,
+which uses a larger ResNet-101 encoder and SCST. Their CIDEr of 96.5 to 98.2 is
+below Att2in's 101.3. Models built on object-detector features remain 22 to 33
+CIDEr points higher, a gap we expect given the difference in features and
+compute.
+
+% VERIFY every literature number below against the original paper before submission.
+% "--" = not reported. Soft/Hard attention METEOR were computed with an older
+% METEOR version; see [xu2015show].
+\begin{table*}[t]
+\caption{Comparison on the MS-COCO Karpathy test split (scores $\times100$).
+B-$n$: BLEU-$n$, M: METEOR, R: ROUGE-L, C: CIDEr-D. Models above the line use
+CNN grid features and an RNN decoder; models below it use detector features
+and/or transformers. For our models, ``(ImageNet)'' marks a frozen encoder
+pretrained on ImageNet-1k, and ``(COCO only)'' an encoder trained from scratch
+on MS-COCO without ImageNet pretraining.}
+\label{tab:main}
+\centering
+\begin{tabular}{@{}llcccccc@{}}
+\toprule
+Model & Encoder & B-1 & B-4 & M & R & C & Training \\
+\midrule
+Deep VS~\cite{karpathy2015deep} & VGG-16 & 62.5 & 23.0 & 19.5 & -- & 66.0 & CE \\
+Soft attention~\cite{xu2015show} & VGG-19 & 70.7 & 24.3 & 23.9 & -- & -- & CE \\
+Hard attention~\cite{xu2015show} & VGG-19 & 71.8 & 25.0 & 23.0 & -- & -- & CE \\
+Att2in~\cite{rennie2017self} & ResNet-101 & -- & 31.3 & 26.0 & 54.3 & 101.3 & SCST \\
+\midrule
+Up-Down~\cite{anderson2018bottom} & Faster R-CNN & 79.8 & 36.3 & 27.7 & 56.9 & 120.1 & SCST \\
+AoANet~\cite{huang2019attention} & Faster R-CNN & 80.2 & 38.9 & 29.2 & 58.8 & 129.8 & SCST \\
+$\mathcal{M}^2$ Transformer~\cite{cornia2020meshed} & Faster R-CNN & 80.8 & 39.1 & 29.2 & 58.6 & 131.2 & SCST \\
+\midrule
+Ours, from scratch$^\dagger$ (Sec.~\ref{sec:original}) & SE-ResNet-50 (COCO only) & 62.7 & 22.1 & 19.3 & 45.9 & 61.0 & mixed SCST \\
+Ours, CE & SE-ResNet-50 (ImageNet) & 72.0 & 31.3 & 25.0 & 53.3 & 96.5 & CE \\
+Ours, CE & ResNet-50-D (ImageNet) & 71.9 & 31.3 & 25.4 & 53.5 & 98.2 & CE \\
+Ours, mixed SCST & SE-ResNet-50 (ImageNet) & 72.7 & 28.6 & 24.0 & 52.8 & 96.8 & 0.8 SCST + 0.2 CE \\
+\bottomrule
+\multicolumn{8}{@{}l}{\footnotesize $^\dagger$Deep $3\times3$ stem; no ImageNet pretraining, stem and first stage left at random initialization,}\\
+\multicolumn{8}{@{}l}{\footnotesize \phantom{$^\dagger$}and SCST learning rate $10^{-6}$. Not comparable to the encoder ablation (Table~\ref{tab:encoder}).}
+\end{tabular}
+\end{table*}
+
+\subsection{Encoder Ablation}
+Table~\ref{tab:encoder} compares the three encoders under the CE stage, with the
+decoder, data, and training budget held fixed. ResNet-50-D gives the best
+CIDEr, 1.5 points above the ResNet-50 baseline, and the best METEOR and
+ROUGE-L. Its lead holds under greedy decoding on the test split (90.6 versus
+89.6 CIDEr) and on the validation split (90.2 versus 88.4). SE-ResNet-50 is
+within 0.2 CIDEr of the baseline and slightly ahead on BLEU-4, so we see no
+clear benefit from SE blocks when the encoder is frozen. The ResNet-D gain
+holds across both splits and both decoding methods, but each encoder was
+trained once, so we have not measured how much it varies between runs.
+
+\begin{table}[t]
+\caption{Encoder ablation after CE training (Karpathy test, scores $\times100$).
+All encoders are frozen and pretrained on ImageNet-1k with the same recipe.}
+\label{tab:encoder}
+\centering
+\setlength{\tabcolsep}{4pt}
+\begin{tabular}{@{}lccccc@{}}
+\toprule
+Encoder & B-1 & B-4 & M & R & C \\
+\midrule
+ResNet-50 & 71.6 & 30.7 & 25.2 & 53.3 & 96.7 \\
+SE-ResNet-50 & \textbf{72.0} & \textbf{31.3} & 25.0 & 53.3 & 96.5 \\
+ResNet-50-D & 71.9 & \textbf{31.3} & \textbf{25.4} & \textbf{53.5} & \textbf{98.2} \\
+\bottomrule
+\end{tabular}
+\end{table}
+
+\subsection{Training-Objective Ablation}
+Table~\ref{tab:loss} compares the training objectives, starting from the same
+CE checkpoint with the SE-ResNet-50 encoder.
+
+\textit{SCST versus CE.} Pure and mixed SCST both remove most repetition: the
+share of captions with a repeated content word falls from 13.4\% to 2.5\%
+(mixed) and 1.3\% (pure). Their effect on the scores depends on decoding. With
+greedy decoding, mixed SCST raises test CIDEr from 88.7 to 97.1. With beam
+search, the CE model gains much more from
+the search, and the difference shrinks to 0.3 CIDEr, while BLEU-4 drops by 2.7
+points. All SCST variants also narrow the output: the vocabulary falls from 419
+words to between 212 and 243, and the share of unique captions from 50\% to
+between 28\% and 33\%.
+
+\textit{Pure versus mixed SCST.} Pure SCST reaches the highest CIDEr (98.6),
+but 77.9\% of its test captions end in a function word. Most end in ``with a''
+(64\% of all test captions), as in ``a plane is sitting on the runway with a''
+or ``a kitchen with a sink and a'', where the mixed model writes ``a kitchen
+with a sink and a window''. CIDEr does not penalize these unfinished endings.
+With 20\% of the CE loss kept, no caption ends this way, at a
+cost of 1.8 CIDEr. The mixed model also uses a larger vocabulary (241 versus
+212 words) and scores slightly higher on BLEU-4
+and ROUGE-L. The mixed objective does not stop the loss of diversity: unique
+captions fall to 29\% with it and to 33\% with pure SCST.
+
+\textit{Advantage normalization.} Without normalization, the policy-gradient
+term is about ten times larger at the start of SCST, and validation CIDEr drops
+from 88.1 to 81.2 in the first epoch, compared with 85.9 with normalization.
+The model recovers, but after 10 epochs it remains 1.3 CIDEr below the
+normalized run on the test split.
+
+\textit{Optimizer reset.} Keeping the Adam state from the CE stage gives 97.6
+CIDEr, 0.8 points above the run with a reset. With one run per setting, we do
+not find a benefit from the reset.
+
+\begin{table*}[t]
+\caption{Training-objective ablation (Karpathy test, scores $\times100$). All SCST
+variants start from the same CE checkpoint. Right block: caption statistics used
+to measure reward hacking (Vocab: distinct words used; Uniq.: \% unique captions;
+D-2: distinct-2; Rep.: \% captions with a repeated content word; Dangl.: \%
+captions ending in a function word; Len.: mean length).}
+\label{tab:loss}
+\centering
+\setlength{\tabcolsep}{4.5pt}
+\begin{tabular}{@{}lccccc|cccccc@{}}
+\toprule
+Objective & B-1 & B-4 & M & R & C & Vocab & Uniq. & D-2 & Rep. & Dangl. & Len. \\
+\midrule
+CE only & 72.0 & 31.3 & 25.0 & 53.3 & 96.5 & 419 & 50.4 & 3.5 & 13.4 & 0.0 & 9.4 \\
+Pure SCST ($\lambda=1$) & 73.7 & 28.2 & 23.9 & 52.1 & 98.6 & 212 & 32.7 & 1.7 & 1.3 & 77.9 & 9.7 \\
+Mixed SCST ($\lambda=0.8$) & 72.7 & 28.6 & 24.0 & 52.8 & 96.8 & 241 & 29.3 & 1.6 & 2.5 & 0.0 & 9.1 \\
+\quad w/o advantage normalization & 72.1 & 27.9 & 23.8 & 52.5 & 95.5 & 236 & 28.5 & 1.5 & 4.2 & 0.0 & 9.1 \\
+\quad w/o optimizer reset & 72.8 & 28.8 & 24.2 & 53.0 & 97.6 & 243 & 31.3 & 1.7 & 5.2 & 0.0 & 9.1 \\
+\bottomrule
+\end{tabular}
+\end{table*}
+
+\subsection{Training Dynamics}
+Fig.~\ref{fig:dynamics} shows validation CIDEr and the dangling-ending rate
+over SCST training. Every variant loses CIDEr in the first epoch; the runs
+with advantage normalization recover above the CE level by epoch 3, the run
+without it only in epoch 4. Pure SCST starts producing dangling endings in
+epoch 3, and they reach 76.4\% of validation captions by epoch 10, while the
+mixed run stays at or below 0.04\%. In all variants, unique captions fall from 64\% to
+between 32\% and 38\% within the first epoch.
+
+\begin{figure}[t]
+\centering
+\figslot{figs/training_dynamics.pdf}{\columnwidth}{training dynamics}
+\caption{Validation CIDEr (greedy decoding, top) and share of captions ending
+in a function word (bottom) per SCST epoch, starting from the same CE
+checkpoint (epoch 0).}
+\label{fig:dynamics}
+\end{figure}
+
+\subsection{Effect of Decoding Heuristics}
+\label{sec:decoding}
+On the test split, the CE model scores 88.7 CIDEr with greedy decoding, 96.0
+with plain beam search (beam 3), and 96.5 with our protocol (beam 7 with length
+penalty, minimum length, and $n$-gram blocking). The mixed SCST model scores
+97.1, 96.8, and 96.8. The heuristics therefore change CIDEr by at most 0.5
+points, so the results do not depend on them. Beam search itself adds 7.3 to
+7.8 CIDEr for the CE model, while for the mixed SCST model it lowers CIDEr
+slightly (97.1 to 96.8).
+
+\subsection{From-Scratch Run}
+\label{sec:original}
+Our first experiment trained an SE-ResNet-50 with a deep $3\times3$ stem from
+scratch on MS-COCO, without ImageNet pretraining. Encoder and decoder were
+trained together in three stages: CE with a frozen encoder, CE fine-tuning of
+the deeper encoder stages, and mixed SCST. We kept only the epoch-87
+checkpoint. In it, the stem and the first residual stage are still at their
+random initialization, since they stayed frozen in every stage; stages 2 to 4
+were learned. The SCST stage used a learning rate of $10^{-6}$, which changes
+the model only slightly (Section~\ref{sec:training}). With our evaluation
+protocol, this model reaches 22.1 BLEU-4 and 61.0 CIDEr (Table~\ref{tab:main}).
+This result, obtained without pretraining, motivated the controlled comparison
+of pretrained encoders in Table~\ref{tab:encoder}.
+
+\subsection{Qualitative Analysis}
+Fig.~\ref{fig:qualitative} shows captions for three randomly drawn test
+images. On the snowboarding image, the CE and mixed models reproduce the
+reference exactly, while pure SCST stops at ``down a snow''; its other two
+captions end in ``with a''. All models also make content errors: every model
+calls the Christmas figurines teddy bears or vases, and the CE model repeats
+itself (``a teddy bear sitting next to a teddy bear'').
+
+\begin{figure}[t]
+\centering
+\figslot{figs/qualitative.pdf}{\columnwidth}{example captions}
+\caption{Captions for three Karpathy test images drawn at random, from the CE,
+mixed SCST, and pure SCST models (SE-ResNet-50 encoder, beam search), with one
+of the reference captions (GT).}
+\label{fig:qualitative}
+\end{figure}
+
+\subsection{Limitations}
+Our encoders are frozen; fine-tuning them could improve all models.
+We evaluate SE and ResNet-D separately because no SE-ResNet-50-D pretrained with
+the same recipe is available. Each configuration was trained once, so we did
+not measure run-to-run variation; we treat differences of about one CIDEr point
+or less, such as SE versus the baseline and the optimizer-reset ablation, as
+inconclusive. Finally, the diversity and repetition statistics measure specific failure modes and are not
+a complete measure of fluency.
+
+% ===========================================================================
+\section{Conclusion}
+% ===========================================================================
+Among frozen ImageNet-pretrained encoders, the ResNet-D modifications improved
+CIDEr by 1.5 points over ResNet-50, while SE blocks gave no clear gain. Pure
+SCST learned to end most captions with ``with a''; keeping 20\% of the
+cross-entropy loss removed these endings for a cost of 1.8 CIDEr, and
+normalizing the advantage softened the drop at the switch to reinforcement
+learning. No SCST variant kept the caption diversity of the CE model, and with
+beam search their CIDEr gain over CE was small. Future work includes
+fine-tuning the encoder, combining SE blocks with the ResNet-D modifications
+under a common pretraining recipe, multi-sample SCST
+baselines~\cite{luo2020better}, and semantic rewards such as SPICE.
+
+% ===========================================================================
+% References
+% ===========================================================================
+\begin{thebibliography}{00}
+\bibitem{vinyals2015show} O. Vinyals, A. Toshev, S. Bengio, and D. Erhan, ``Show and tell: A neural image caption generator,'' in \textit{Proc. IEEE Conf. Comput. Vis. Pattern Recognit. (CVPR)}, 2015, pp. 3156--3164.
+\bibitem{xu2015show} K. Xu \textit{et al.}, ``Show, attend and tell: Neural image caption generation with visual attention,'' in \textit{Proc. Int. Conf. Mach. Learn. (ICML)}, 2015, pp. 2048--2057.
+\bibitem{karpathy2015deep} A. Karpathy and L. Fei-Fei, ``Deep visual-semantic alignments for generating image descriptions,'' in \textit{Proc. IEEE Conf. Comput. Vis. Pattern Recognit. (CVPR)}, 2015, pp. 3128--3137.
+\bibitem{mao2015deep} J. Mao, W. Xu, Y. Yang, J. Wang, Z. Huang, and A. Yuille, ``Deep captioning with multimodal recurrent neural networks (m-RNN),'' in \textit{Proc. Int. Conf. Learn. Represent. (ICLR)}, 2015.
+\bibitem{ranzato2016sequence} M. Ranzato, S. Chopra, M. Auli, and W. Zaremba, ``Sequence level training with recurrent neural networks,'' in \textit{Proc. Int. Conf. Learn. Represent. (ICLR)}, 2016.
+\bibitem{bengio2015scheduled} S. Bengio, O. Vinyals, N. Jaitly, and N. Shazeer, ``Scheduled sampling for sequence prediction with recurrent neural networks,'' in \textit{Adv. Neural Inf. Process. Syst. (NeurIPS)}, 2015, pp. 1171--1179.
+\bibitem{rennie2017self} S. J. Rennie, E. Marcheret, Y. Mroueh, J. Ross, and V. Goel, ``Self-critical sequence training for image captioning,'' in \textit{Proc. IEEE Conf. Comput. Vis. Pattern Recognit. (CVPR)}, 2017, pp. 7008--7024.
+\bibitem{papineni2002bleu} K. Papineni, S. Roukos, T. Ward, and W.-J. Zhu, ``BLEU: A method for automatic evaluation of machine translation,'' in \textit{Proc. Annu. Meeting Assoc. Comput. Linguistics (ACL)}, 2002, pp. 311--318.
+\bibitem{vedantam2015cider} R. Vedantam, C. L. Zitnick, and D. Parikh, ``CIDEr: Consensus-based image description evaluation,'' in \textit{Proc. IEEE Conf. Comput. Vis. Pattern Recognit. (CVPR)}, 2015, pp. 4566--4575.
+\bibitem{banerjee2005meteor} S. Banerjee and A. Lavie, ``METEOR: An automatic metric for MT evaluation with improved correlation with human judgments,'' in \textit{Proc. ACL Workshop Intrinsic Extrinsic Eval. Measures Mach. Transl. Summarization}, 2005, pp. 65--72.
+\bibitem{lin2004rouge} C.-Y. Lin, ``ROUGE: A package for automatic evaluation of summaries,'' in \textit{Text Summarization Branches Out}, 2004, pp. 74--81.
+\bibitem{lin2014microsoft} T.-Y. Lin \textit{et al.}, ``Microsoft COCO: Common objects in context,'' in \textit{Proc. Eur. Conf. Comput. Vis. (ECCV)}, 2014, pp. 740--755.
+\bibitem{chen2015microsoft} X. Chen \textit{et al.}, ``Microsoft COCO captions: Data collection and evaluation server,'' \textit{arXiv preprint arXiv:1504.00325}, 2015.
+\bibitem{he2016deep} K. He, X. Zhang, S. Ren, and J. Sun, ``Deep residual learning for image recognition,'' in \textit{Proc. IEEE Conf. Comput. Vis. Pattern Recognit. (CVPR)}, 2016, pp. 770--778.
+\bibitem{he2019bag} T. He, Z. Zhang, H. Zhang, Z. Zhang, J. Xie, and M. Li, ``Bag of tricks for image classification with convolutional neural networks,'' in \textit{Proc. IEEE Conf. Comput. Vis. Pattern Recognit. (CVPR)}, 2019, pp. 558--567.
+\bibitem{hu2018squeeze} J. Hu, L. Shen, and G. Sun, ``Squeeze-and-excitation networks,'' in \textit{Proc. IEEE Conf. Comput. Vis. Pattern Recognit. (CVPR)}, 2018, pp. 7132--7141.
+\bibitem{wightman2021resnet} R. Wightman, H. Touvron, and H. J\'egou, ``ResNet strikes back: An improved training procedure in timm,'' \textit{arXiv preprint arXiv:2110.00476}, 2021.
+\bibitem{anderson2018bottom} P. Anderson \textit{et al.}, ``Bottom-up and top-down attention for image captioning and visual question answering,'' in \textit{Proc. IEEE Conf. Comput. Vis. Pattern Recognit. (CVPR)}, 2018, pp. 6077--6086.
+\bibitem{huang2019attention} L. Huang, W. Wang, J. Chen, and X.-Y. Wei, ``Attention on attention for image captioning,'' in \textit{Proc. IEEE/CVF Int. Conf. Comput. Vis. (ICCV)}, 2019, pp. 4634--4643.
+\bibitem{cornia2020meshed} M. Cornia, M. Stefanini, L. Baraldi, and R. Cucchiara, ``Meshed-memory transformer for image captioning,'' in \textit{Proc. IEEE/CVF Conf. Comput. Vis. Pattern Recognit. (CVPR)}, 2020, pp. 10578--10587.
+\bibitem{paulus2018deep} R. Paulus, C. Xiong, and R. Socher, ``A deep reinforced model for abstractive summarization,'' in \textit{Proc. Int. Conf. Learn. Represent. (ICLR)}, 2018.
+\bibitem{luo2020better} R. Luo, ``A better variant of self-critical sequence training,'' \textit{arXiv preprint arXiv:2003.09971}, 2020.
+\end{thebibliography}
+
+\end{document}

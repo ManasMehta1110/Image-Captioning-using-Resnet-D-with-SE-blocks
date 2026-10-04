@@ -1,0 +1,5 @@
+[queue] ce_resnet50_s0: starting
+[queue] ce_seresnet50_s0: starting
+[queue] ce_seresnet50_s0: exited with code 1073807364; stopping queue (see runs/ce_seresnet50_s0.out)
+[queue] ce_resnet50_s0: done, skipping
+[queue] ce_seresnet50_s0: starting
