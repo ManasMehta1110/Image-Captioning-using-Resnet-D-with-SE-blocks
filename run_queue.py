@@ -20,9 +20,11 @@ def ce_job(enc):
 
 
 def scst_job(name, *extra):
-    # SCST stage on SE-ResNet-50 (decided before its CE results existed; see DECISIONS.md)
+    # SCST stage on SE-ResNet-50 (decided before its CE results existed; see DECISIONS.md).
+    # Every SCST variant trains the full 10 epochs (--patience 10 disables early stopping),
+    # matching the paper; see DECISIONS.md for why the no-normalization run needed this.
     return name, ['--feat_dir', 'data/coco/timm_features/seresnet50', '--init', 'runs/ce_seresnet50_s0/best.pt',
-                  '--seed', '0', *extra]
+                  '--seed', '0', '--patience', '10', *extra]
 
 
 QUEUES = {
