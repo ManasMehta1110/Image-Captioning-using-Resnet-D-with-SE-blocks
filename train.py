@@ -264,10 +264,13 @@ def train(train_loader, encoder, decoder, criterion, encoder_optimizer, decoder_
 
         if use_scst:
             # ===================== REAL CIDEr SCST =====================
-            sampled_ids, log_probs = decoder.sample(imgs, max_len=20, greedy=False)
+            sampled_ids, log_probs = decoder.sample(imgs, start_token, end_token, max_len=20, greedy=False)
 
+            # Greedy baseline without dropout, so it reflects the model used at test time
+            decoder.eval()
             with torch.no_grad():
-                greedy_ids, _ = decoder.sample(imgs, max_len=20, greedy=True)
+                greedy_ids, _ = decoder.sample(imgs, start_token, end_token, max_len=20, greedy=True)
+            decoder.train()
 
             references = {}
             sampled_dict = {}
@@ -321,7 +324,7 @@ def train(train_loader, encoder, decoder, criterion, encoder_optimizer, decoder_
             targets = caps_sorted[:, 1:]
             ce_loss = 0
             for i, l in enumerate(decode_lengths):
-                ce_loss += criterion(predictions[i, :l, :], targets[i, :l])
+                ce_loss += criterion(predictions[i, :l, :], targets[i, :l]) * l  # criterion is a per-token mean; weight by length
             ce_loss = ce_loss / sum(decode_lengths)
 
             # Mixed Loss (80% RL, 20% Cross-Entropy) to brutally anchor grammar
@@ -333,7 +336,7 @@ def train(train_loader, encoder, decoder, criterion, encoder_optimizer, decoder_
 
             loss = 0
             for i, l in enumerate(decode_lengths):
-                loss += criterion(predictions[i, :l, :], targets[i, :l])
+                loss += criterion(predictions[i, :l, :], targets[i, :l]) * l  # criterion is a per-token mean; weight by length
             loss = loss / sum(decode_lengths)
 
         decoder_optimizer.zero_grad()
@@ -389,7 +392,7 @@ def validate(val_loader, encoder, decoder, criterion, word_map):
 
             loss = 0
             for i, l in enumerate(decode_lengths):
-                loss += criterion(predictions[i, :l, :], targets[i, :l])
+                loss += criterion(predictions[i, :l, :], targets[i, :l]) * l  # criterion is a per-token mean; weight by length
             loss = loss / sum(decode_lengths)
             losses.update(loss.item(), sum(decode_lengths))
 
